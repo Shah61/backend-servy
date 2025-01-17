@@ -28,11 +28,11 @@ def init_db():
 
     # Drop existing tables if they exist
     tables = ['chats', 'reviews', 'notifications', 'rankings', 'reports', 'bookings', 
-              'services', 'service_providers', 'users', 'admins', 'categories']
+              'services', 'service_providers', 'users', 'admins', 'categories', 'addresses']
     for table in tables:
         cursor.execute(f'DROP TABLE IF EXISTS {table}')
 
-    # Create users table
+    # Create users table (no dependencies)
     cursor.execute('''
     CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +45,21 @@ def init_db():
     )
     ''')
 
-    # Create service_providers table
+    # Create addresses table (depends on users)
+    cursor.execute('''
+    CREATE TABLE addresses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        address TEXT NOT NULL,
+        city TEXT NOT NULL,
+        is_default BOOLEAN NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    )
+    ''')
+
+    # Create service_providers table (no dependencies)
     cursor.execute('''
     CREATE TABLE service_providers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +76,7 @@ def init_db():
     )
     ''')
 
-    # Create admins table
+    # Create admins table (no dependencies)
     cursor.execute('''
     CREATE TABLE admins (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +84,32 @@ def init_db():
         password VARCHAR NOT NULL
     )
     ''')
-    # Create bookings table
+
+    # Create categories table (no dependencies)
+    cursor.execute('''
+    CREATE TABLE categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name VARCHAR NOT NULL,
+        path VARCHAR NOT NULL,
+        icon VARCHAR NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+
+    # Create services table (depends on categories and service_providers)
+    cursor.execute('''
+    CREATE TABLE services (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name VARCHAR NOT NULL,
+        description TEXT,
+        price FLOAT NOT NULL,
+        category_id INTEGER REFERENCES categories(id),
+        provider_id INTEGER REFERENCES service_providers(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+
+    # Create bookings table (depends on users, services, and service_providers)
     cursor.execute('''
     CREATE TABLE bookings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,7 +127,7 @@ def init_db():
     )
     ''')
 
-    # Create reviews table
+    # Create reviews table (depends on bookings, users, and service_providers)
     cursor.execute('''
     CREATE TABLE reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,7 +143,7 @@ def init_db():
     )
     ''')
 
-    # Create chats table
+    # Create chats table (depends on bookings)
     cursor.execute('''
     CREATE TABLE chats (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,7 +156,7 @@ def init_db():
     )
     ''')
 
-    # Create notifications table
+    # Create notifications table (depends on users, service_providers, and bookings)
     cursor.execute('''
     CREATE TABLE notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,7 +171,7 @@ def init_db():
     )
     ''')
 
-    # Create rankings table
+    # Create rankings table (depends on service_providers)
     cursor.execute('''
     CREATE TABLE rankings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,42 +183,7 @@ def init_db():
     )
     ''')
 
-    cursor.execute('''
-    CREATE TABLE categories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name VARCHAR NOT NULL,
-    path VARCHAR NOT NULL,
-    icon VARCHAR NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-    ''')
-
-    sample_categories = [
-         ('House Cleaning', 'house-cleaning', '🧹'),
-        ('Plumbing', 'plumbing', '🔧'),
-        ('Electrical', 'electrical', '⚡'),
-        ('Moving', 'moving', '📦'),
-        ('Gardening', 'gardening', '🌱'),
-        ('Painting', 'painting', '🎨'),
-        ('Appliance Repair', 'appliance-repair', '🔨'),
-        ('Pest Control', 'pest-control', '🐜')
-    ]
-    
-
-    cursor.executemany('''
-    INSERT INTO categories (name, path, icon)
-    VALUES (?, ?, ?)
-    ''', sample_categories)
-    
-    # Add category_id to services table
-    cursor.execute('''
-    ALTER TABLE services 
-    ADD COLUMN category_id INTEGER
-    REFERENCES categories(id)
-    ''')
-                       
-
-    # Create reports table
+    # Create reports table (no specific foreign keys but relates to users and providers)
     cursor.execute('''
     CREATE TABLE reports (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,35 +194,45 @@ def init_db():
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     ''')
+
+    # Insert sample categories
+    sample_categories = [
+        ('House Cleaning', 'house-cleaning', '🧹'),
+        ('Plumbing', 'plumbing', '🔧'),
+        ('Electrical', 'electrical', '⚡'),
+        ('Moving', 'moving', '📦'),
+        ('Gardening', 'gardening', '🌱'),
+        ('Painting', 'painting', '🎨'),
+        ('Appliance Repair', 'appliance-repair', '🔨'),
+        ('Pest Control', 'pest-control', '🐜')
+    ]
     
-    # Create addresses table
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS addresses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        type TEXT NOT NULL,
-        address TEXT NOT NULL,
-        city TEXT NOT NULL,
-        is_default BOOLEAN NOT NULL DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id)
-    )
-    ''')
+    cursor.executemany('''
+    INSERT INTO categories (name, path, icon)
+    VALUES (?, ?, ?)
+    ''', sample_categories)
 
-    # Create services table
+    # Insert sample users
     cursor.execute('''
-    CREATE TABLE services (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name VARCHAR NOT NULL,
-        description TEXT,
-        price FLOAT NOT NULL,
-        category_id INTEGER REFERENCES categories(id),
-        provider_id INTEGER REFERENCES service_providers(id),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-    ''')
+    INSERT INTO users (email, password, name, phone, profile_image)
+    VALUES (?, ?, ?, ?, ?)
+    ''', ('user@example.com', 'hashed_password', 'John Doe', '+1234567890', 'profile1.jpg'))
 
-    # Insert sample services data - add this right after creating the services table
+    # Insert sample service provider
+    cursor.execute('''
+    INSERT INTO service_providers 
+    (email, password, name, ic_number, phone, profile_image, is_verified, rating)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', ('provider@example.com', 'hashed_password', 'Jane Smith', 'IC123456', 
+          '+0987654321', 'profile2.jpg', True, 4.5))
+
+    # Insert sample admin
+    cursor.execute('''
+    INSERT INTO admins (username, password)
+    VALUES (?, ?)
+    ''', ('admin', 'admin_password'))
+
+    # Insert sample services
     sample_services = [
         # House Cleaning services
         ('Deep House Cleaning', 'Complete house deep cleaning service including all rooms and surfaces', 150.00, 1, 1),
@@ -246,13 +260,11 @@ def init_db():
         VALUES (?, ?, ?, ?, ?)
     ''', sample_services)
 
-    
-
-    # Sample addresses data
+    # Insert sample addresses
     sample_addresses = [
         (1, 'Home', 'No. 15, Jalan Suria 12, Taman Suria', 'Johor Bahru, Johor 81100', True),
         (1, 'Work', 'Block A-12-3, Plaza Sentral, Jalan Stesen Sentral 5', 'Kuala Lumpur 50470', False),
-        (1, 'Parent\'s House', 'No. 27, Lorong Kelapa 3, Taman Indah', 'Penang 11900', False)
+        (1, "Parent's House", 'No. 27, Lorong Kelapa 3, Taman Indah', 'Penang 11900', False)
     ]
 
     cursor.executemany('''
@@ -260,39 +272,10 @@ def init_db():
         VALUES (?, ?, ?, ?, ?)
     ''', sample_addresses)
 
-    
-
-    # Insert sample data
-    # Sample users
-    cursor.execute('''
-    INSERT INTO users (email, password, name, phone, profile_image)
-    VALUES (?, ?, ?, ?, ?)
-    ''', ('user@example.com', 'hashed_password', 'John Doe', '+1234567890', 'profile1.jpg'))
-
-    # Sample service provider
-    cursor.execute('''
-    INSERT INTO service_providers 
-    (email, password, name, ic_number, phone, profile_image, is_verified, rating)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', ('provider@example.com', 'hashed_password', 'Jane Smith', 'IC123456', 
-          '+0987654321', 'profile2.jpg', True, 4.5))
-
-    # Sample admin
-    cursor.execute('''
-    INSERT INTO admins (username, password)
-    VALUES (?, ?)
-    ''', ('admin', 'admin_password'))
-
-    # Sample service
-    cursor.execute('''
-    INSERT INTO services (name, description, price)
-    VALUES (?, ?, ?)
-    ''', ('House Cleaning', 'Complete house cleaning service', 100.00))
-
     # Commit the changes and close the connection
     conn.commit()
     conn.close()
     print("Database initialized successfully with the new schema!")
 
 if __name__ == "__main__":
-    init_db()
+    init_db
