@@ -44,6 +44,143 @@ async def get_services():
         for s in services
     ]
 
+@app.get("/api/categories")
+async def get_categories():
+    conn = sqlite3.connect('services.db')
+    c = conn.cursor()
+    
+    try:
+        # Get categories with service count
+        c.execute('''
+            SELECT c.id, c.name, c.path, c.icon, COUNT(s.id) as service_count
+            FROM categories c
+            LEFT JOIN services s ON c.id = s.category_id
+            GROUP BY c.id
+        ''')
+        
+        categories = c.fetchall()
+        
+        return [
+            {
+                "id": cat[0],
+                "name": cat[1],
+                "path": cat[2],
+                "icon": cat[3],
+                "services": f"{cat[4]} services available" if cat[4] > 0 else "No services yet"
+            }
+            for cat in categories
+        ]
+    finally:
+        conn.close()
+
+@app.get("/api/categories/{category_path}/services")
+async def get_category_services(category_path: str):
+    try:
+        conn = sqlite3.connect('services.db')
+        c = conn.cursor()
+        
+        # Get services for the category along with provider details
+        c.execute('''
+            SELECT 
+                s.id,
+                s.name as title,
+                s.description,
+                s.price,
+                s.price * 1.2 as original_price,
+                sp.id as provider_id,
+                sp.name as provider_name,
+                sp.rating as provider_rating,
+                sp.profile_image as provider_image,
+                (SELECT COUNT(*) FROM reviews r 
+                 JOIN bookings b ON r.booking_id = b.id 
+                 WHERE b.service_id = s.id) as review_count
+            FROM services s
+            JOIN categories c ON s.category_id = c.id
+            LEFT JOIN service_providers sp ON sp.id = s.provider_id
+            WHERE c.path = ?
+        ''', (category_path,))
+        
+        services = c.fetchall()
+        
+        return [
+            {
+                "id": s[0],
+                "title": s[1],
+                "description": s[2],
+                "price": s[3],
+                "originalPrice": s[4],
+                "rating": s[7] or 5.0,  # Default to 5 if no rating
+                "reviews": s[9] or 0,
+                "provider": {
+                    "id": s[5],
+                    "name": s[6] or "Service Provider",
+                    "image": s[8] or "/api/placeholder/32/32",
+                    "role": "Service Provider"
+                },
+                "image": "/api/placeholder/400/200"  # Placeholder image
+            }
+            for s in services
+        ]
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/api/featured-services")
+async def get_featured_services():
+    try:
+        conn = sqlite3.connect('services.db')
+        c = conn.cursor()
+        
+        # Get top rated services
+        c.execute('''
+            SELECT 
+                s.id,
+                s.name as title,
+                s.description,
+                s.price,
+                s.price * 1.2 as original_price,
+                sp.id as provider_id,
+                sp.name as provider_name,
+                sp.rating as provider_rating,
+                sp.profile_image as provider_image,
+                (SELECT COUNT(*) FROM reviews r 
+                 JOIN bookings b ON r.booking_id = b.id 
+                 WHERE b.service_id = s.id) as review_count
+            FROM services s
+            LEFT JOIN service_providers sp ON sp.id = s.provider_id
+            ORDER BY sp.rating DESC, review_count DESC
+            LIMIT 10
+        ''')
+        
+        services = c.fetchall()
+        
+        return [
+            {
+                "id": s[0],
+                "title": s[1],
+                "description": s[2],
+                "price": s[3],
+                "originalPrice": s[4],
+                "rating": s[7] or 5.0,
+                "reviews": s[9] or 0,
+                "provider": {
+                    "id": s[5],
+                    "name": s[6] or "Service Provider",
+                    "image": s[8] or "/api/placeholder/32/32",
+                    "role": "Service Provider"
+                },
+                "image": "/api/placeholder/400/200"
+            }
+            for s in services
+        ]
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
 @app.get("/api/services/{service_id}")
 async def get_service_details(service_id: int):
     conn = sqlite3.connect('services.db')
